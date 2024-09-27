@@ -1,7 +1,11 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+Firebase.js
+
 # dependencies
 node_modules/
+
+backups/
 
 # Expo
 .expo/
