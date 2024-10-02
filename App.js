@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity, Alert, Image, FlatList, Text, Dimensions, Animated, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
-import firebase from './Firebase';
-import { deleteDoc } from 'firebase/firestore';
-import { auth, firestore } from './Firebase';
+import { Provider, useSelector, useDispatch } from 'react-redux';
+import { store } from './store';
+import { fetchBooks, addBook, updateBook, deleteBook } from './store/booksSlice';
+import { signOut } from './store/authSlice';
 import SplashScreen from './SplashScreen';
 import SignInScreen from './SignInScreen';
 import AddBookScreen from './AddBookScreen';
@@ -14,69 +15,19 @@ const { width } = Dimensions.get('window');
 const numColumns = 4;
 const itemWidth = (width - 40) / numColumns;
 
-export default function App() {
+const AppContent = () => {
+  const dispatch = useDispatch();
+  const { isSignedIn, user } = useSelector(state => state.auth);
+  const books = useSelector(state => state.books);
+
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const [books, setBooks] = useState([]);
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [showAddBook, setShowAddBook] = useState(false);
-
-  const [selectedBook, setSelectedBook] = useState(null);  // To store the selected book for editing or deleting
-  const [showBookMenu, setShowBookMenu] = useState(false); // To show the book menu
-  const [showBookDetails, setShowBookDetails] = useState(false); //To show book details screen
-
-  const deleteBook = async (bookId) => {
-    try {
-      const userId = auth.currentUser.uid;
-      await firestore.collection('users').doc(userId).collection('books').doc(bookId).delete();
-      setBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
-    } catch (error) {
-      console.error('Error deleting book:', error);
-      Alert.alert('Error', 'Failed to delete the book. Please try again.');
-    }
-  };
-
-  //Show edit menu on long press
-  const handleLongPress = (book) => {
-    setSelectedBook(book);
-    setShowBookMenu(true);
-  };
-
-  //show details on short press
-  const handleBookPress = (book) => {
-    setSelectedBook(book);
-    setShowBookDetails(true);
-  };
-
-  const handleUpdateBook = async (updatedBook) => {
-    try {
-      const userId = auth.currentUser.uid;
-      console.log("Updating book with ID:", updatedBook.id);
-      
-      if (!updatedBook.id) {
-        console.error('Book ID is missing');
-        return;
-      }
-  
-      const bookRef = firestore.collection('users').doc(userId).collection('books').doc(updatedBook.id);
-      
-      // Check if the document exists before updating
-      const doc = await bookRef.get();
-      if (!doc.exists) {
-        console.error('Document does not exist');
-        return;
-      }
-  
-      await bookRef.update(updatedBook);
-      setBooks(prevBooks => prevBooks.map(book => book.id === updatedBook.id ? updatedBook : book));
-    } catch (error) {
-      console.error('Error updating book:', error);
-      Alert.alert('Error', 'Failed to update book details. Please try again.');
-    }
-  };
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showBookMenu, setShowBookMenu] = useState(false);
+  const [showBookDetails, setShowBookDetails] = useState(false);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -90,37 +41,10 @@ export default function App() {
       setIsLoading(false);
     }, 2000);
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      console.log("Auth state changed:", user ? "User signed in" : "User signed out");
-      if (user) {
-        setIsSignedIn(true);
-        setUserEmail(user.email);
-        fetchUserBooks(user.uid);
-      } else {
-        setIsSignedIn(false);
-        setUserEmail('');
-        setBooks([]);
-      }
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const fetchUserBooks = async (userId) => {
-    try {
-      const snapshot = await firestore.collection('users').doc(userId).collection('books').get();
-      const fetchedBooks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setBooks(fetchedBooks);
-    } catch (error) {
-      console.error('Error fetching user books:', error);
+    if (isSignedIn && user) {
+      dispatch(fetchBooks(user.uid));
     }
-  };
-
-  const handleSignIn = (email) => {
-    console.log("handleSignIn called with email:", email);
-    setUserEmail(email);
-    setIsSignedIn(true);
-  };
+  }, [isSignedIn, user, dispatch]);
 
   const handleBarCodeScanned = ({ type, data }) => {
     setScanned(true);
@@ -137,8 +61,7 @@ export default function App() {
 
       if (title !== 'Unknown Title' && coverUrl) {
         const newBook = { isbn, coverUrl, title };
-        await addBookToFirestore(newBook);
-        setBooks((prevBooks) => [...prevBooks, newBook]);
+        dispatch(addBook({ userId: user.uid, book: newBook }));
       } else {
         Alert.alert('Book not found', 'No book found with the provided ISBN.');
       }
@@ -148,34 +71,13 @@ export default function App() {
     }
   };
 
-  const addBookToFirestore = async (book) => {
-    try {
-      const userId = auth.currentUser.uid;
-      await firestore.collection('users').doc(userId).collection('books').add(book);
-    } catch (error) {
-      console.error('Error adding book to Firestore:', error);
-    }
+  const handleDeleteBook = (bookId) => {
+    dispatch(deleteBook({ userId: user.uid, bookId }));
   };
 
-  // const searchByTitle = async (title) => {
-  //   try {
-  //     const response = await fetch(`https://openlibrary.org/search.json?title=${title}`);
-  //     const data = await response.json();
-  //     const book = data.docs[0];
-  //     if (book) {
-  //       const isbn = book.isbn ? book.isbn[0] : '';
-  //       const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
-  //       const newBook = { isbn, coverUrl, title: book.title };
-  //       await addBookToFirestore(newBook);
-  //       setBooks((prevBooks) => [...prevBooks, newBook]);
-  //     } else {
-  //       Alert.alert('Book not found', 'No book found with the provided title.');
-  //     }
-  //   } catch (error) {
-  //     console.error('Error searching by title:', error);
-  //     Alert.alert('Error', 'Failed to search for the book. Please try again.');
-  //   }
-  // };
+  const handleUpdateBook = (updatedBook) => {
+    dispatch(updateBook({ userId: user.uid, book: updatedBook }));
+  };
 
   const renderItem = useCallback(({ item }) => (
     <TouchableOpacity onPress={() => handleBookPress(item)} onLongPress={() => handleLongPress(item)}>
@@ -186,17 +88,27 @@ export default function App() {
     </TouchableOpacity>
   ), []);
 
+  const handleLongPress = (book) => {
+    setSelectedBook(book);
+    setShowBookMenu(true);
+  };
+
+  const handleBookPress = (book) => {
+    setSelectedBook(book);
+    setShowBookDetails(true);
+  };
+
   if (isLoading) {
     return <SplashScreen />;
   }
 
   if (!isSignedIn) {
-    return <SignInScreen onSignIn={handleSignIn} />;
+    return <SignInScreen />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.userEmail}>Logged in as: {userEmail}</Text>
+      <Text style={styles.userEmail}>Logged in as: {user.email}</Text>
       {showCamera ? (
         <View style={styles.cameraContainer}>
           <CameraView
@@ -223,7 +135,7 @@ export default function App() {
             <FlatList
               data={books}
               renderItem={renderItem}
-              keyExtractor={(item) => item.isbn}
+              keyExtractor={(item) => item.id}
               numColumns={4}
               style={styles.bookGrid}
             />
@@ -245,8 +157,8 @@ export default function App() {
             <AddBookScreen
               onClose={() => setShowAddBook(false)}
               onAddBook={(book) => {
-                addBookToFirestore(book);
-                setBooks((prevBooks) => [...prevBooks, book]);
+                dispatch(addBook({ userId: user.uid, book }));
+                setShowAddBook(false);
               }}
               onOpenCamera={() => {
                 setShowAddBook(false);
@@ -254,18 +166,18 @@ export default function App() {
               }}
             />
           </ScrollView>
-        </KeyboardAvoidingView> //maybe remove scroll and keyavoid or put somewhere else
+        </KeyboardAvoidingView>
       )}
       {showBookMenu && selectedBook && (
         <BookMenuScreen
           onClose={() => setShowBookMenu(false)}
           onDelete={() => {
-            deleteBook(selectedBook.id);
+            handleDeleteBook(selectedBook.id);
             setShowBookMenu(false);
           }}
           onEdit={() => {
-            // Logic to edit the book can go here
             setShowBookMenu(false);
+            setShowBookDetails(true);
           }}
         />
       )}
@@ -278,7 +190,16 @@ export default function App() {
       )}
     </View>
   );
-}
+};
+
+const App = () => (
+  <Provider store={store}>
+    <AppContent />
+  </Provider>
+);
+
+
+export default App;
 
 const styles = StyleSheet.create({
   container: {

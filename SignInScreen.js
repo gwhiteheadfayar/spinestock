@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
-import { auth } from './Firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { useDispatch } from 'react-redux';
+import { signIn, signUp } from './store/authSlice';
 
-import { KeyboardAvoidingView, Platform } from 'react-native';
-
-const SignInScreen = ({ onSignIn }) => {
+const SignInScreen = () => {
+  const dispatch = useDispatch();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
 
   const handleSignIn = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      onSignIn(email);
+      await dispatch(signIn({ email, password })).unwrap();
     } catch (error) {
       Alert.alert('Error', error.message);
     }
@@ -21,8 +19,7 @@ const SignInScreen = ({ onSignIn }) => {
 
   const handleSignUp = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      onSignIn(email);
+      await dispatch(signUp({ email, password })).unwrap();
     } catch (error) {
       Alert.alert('Error', error.message);
     }
@@ -38,8 +35,6 @@ const SignInScreen = ({ onSignIn }) => {
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
-          //debug
-          onFocus={() => console.log('Email input focused')}
         />
         <TextInput
           style={styles.input}
@@ -47,8 +42,6 @@ const SignInScreen = ({ onSignIn }) => {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          //debug
-          onFocus={() => console.log('Password input focused')}
         />
         {isSigningUp ? (
           <TouchableOpacity style={styles.button} onPress={handleSignUp}>

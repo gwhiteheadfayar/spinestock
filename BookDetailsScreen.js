@@ -3,7 +3,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Animated, PanResponder, ScrollView, ActivityIndicator } from 'react-native';
 
-const BookDetailsScreen = ({ book, onClose, onUpdateBook }) => {
+import { useDispatch, useSelector } from 'react-redux';
+import { updateBook } from './store/booksSlice';
+
+const BookDetailsScreen = ({ book, onClose }) => {
+  const dispatch = useDispatch();
+  const userId = useSelector(state => state.auth.user.uid);
+
+  const handleUpdateBook = async (updatedBook) => {
+    await dispatch(updateBook({ userId, book: updatedBook }));
+  };
+
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState(null);
 
@@ -118,6 +128,8 @@ const BookDetailsScreen = ({ book, onClose, onUpdateBook }) => {
       </ScrollView>
     </Animated.View>
   );
+
+  
 };
 
 const styles = StyleSheet.create({

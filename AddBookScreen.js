@@ -1,10 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, PanResponder, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { addBook } from './store/booksSlice';
 
-const AddBookScreen = ({ onClose, onAddBook, onOpenCamera }) => {
+const AddBookScreen = ({ onClose, onOpenCamera }) => {
+  const dispatch = useDispatch();
+  const userId = useSelector(state => state.auth.user.uid);
+
   const [isbn, setIsbn] = useState('');
   const [title, setTitle] = useState('');
-  const [mode, setMode] = useState('isbn'); // 'isbn' or 'title'
+  const [mode, setMode] = useState('isbn');
   const [author, setAuthor] = useState('');
 
   const panY = useRef(new Animated.Value(0)).current;
@@ -46,10 +51,18 @@ const AddBookScreen = ({ onClose, onAddBook, onOpenCamera }) => {
         const response = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
         const data = await response.json();
         const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
-        const title = data.title || 'Unknown Title';
+        const bookTitle = data.title || 'Unknown Title';
 
-        if (title !== 'Unknown Title' && coverUrl) {
-          onAddBook({ title: book.title, author: book.author_name?.[0], isbn: book.isbn?.[0], coverUrl });
+        if (bookTitle !== 'Unknown Title' && coverUrl) {
+          dispatch(addBook({ 
+            userId, 
+            book: { 
+              title: bookTitle, 
+              author: data.authors?.[0]?.name, 
+              isbn, 
+              coverUrl 
+            } 
+          }));
           onClose();
         } else {
           Alert.alert('Book not found', 'No book found with the provided ISBN.');
@@ -71,7 +84,15 @@ const AddBookScreen = ({ onClose, onAddBook, onOpenCamera }) => {
         if (book && book.cover_i) {
           const cover = book.cover_i;
           const coverUrl = `https://covers.openlibrary.org/b/id/${cover}-M.jpg`;
-          onAddBook({ title: book.title, author: book.author_name?.[0], isbn: book.isbn?.[0], coverUrl });
+          dispatch(addBook({ 
+            userId, 
+            book: { 
+              title: book.title, 
+              author: book.author_name?.[0], 
+              isbn: book.isbn?.[0], 
+              coverUrl 
+            } 
+          }));
           onClose();
         } else {
           Alert.alert('Book not found', 'No book found with the provided title and author, or cover image not available.');
@@ -83,16 +104,13 @@ const AddBookScreen = ({ onClose, onAddBook, onOpenCamera }) => {
     }
   };
 
-  //will this do anything, should animate book screen
   useEffect(() => {
-    // Slide up the panel when the screen is opened
     Animated.timing(panY, {
-      toValue: 0,  // Starts offscreen and slides into place
+      toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
   }, []);
-
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
